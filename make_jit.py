@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 example_forward_input = torch.rand(1, 3, 800, 600)
 
-model = ACFDPN(2, backbone="dpn92")
+model = ACFDPN(2, backbone="dpn68")
 checkpoint = torch.load("model_best.pth.tar")
 
 checkpoint2 = OrderedDict()

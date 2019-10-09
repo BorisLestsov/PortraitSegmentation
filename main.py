@@ -237,9 +237,10 @@ def main_worker(gpu, ngpus_per_node, args):
                                      std=[0.229, 0.224, 0.225])
     albu_t = Compose([
             Resize(800, 600),
+            #Resize(400, 300),
             HorizontalFlip(),
             Cutout(num_holes=8, max_h_size=800//10, max_w_size=800//10),
-            ShiftScaleRotate(),
+            ShiftScaleRotate(shift_limit=0.0625, rotate_limit=15, border_mode=0),
             RandomBrightnessContrast(),
             RandomGamma(),
         ])
@@ -472,7 +473,7 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 15))
+    lr = args.lr * (0.1 ** (epoch // 10))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
