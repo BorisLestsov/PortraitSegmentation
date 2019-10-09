@@ -25,7 +25,7 @@ def get_vis(images, output, target):
         out_dbg *= 255
         out_dbg = out_dbg.astype(np.uint8)
 
-        in_dbg1 = cv2.cvtColor(in_dbg, cv2.COLOR_RGB2RGBA)
+        in_dbg1 = cv2.cvtColor(in_dbg.copy(), cv2.COLOR_RGB2RGBA)
         in_dbg1[:, :, 3] = out_dbg
 
         out_gt = target.cpu().numpy()[t].astype(np.float32)

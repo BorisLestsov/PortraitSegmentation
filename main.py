@@ -21,7 +21,7 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 from tensorboardX import SummaryWriter
 
-from models_seg import ACFDenseNet
+import models_seg
 from data_portrait import SegDataset
 
 from losses import dice_loss
@@ -161,7 +161,12 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
     # create model
-    model = ACFDenseNet(num_classes=args.num_classes)
+    if 'dpn' in args.arch:
+        model = models_seg.ACFDPN(num_classes=args.num_classes, backbone=args.arch)
+    elif 'dpn' in args.arch:
+        model = models_seg.ACFDenseNet(num_classes=args.num_classes, backbone=args.arch)
+    else:
+        raise Exception("wrong arch")
 
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
@@ -176,6 +181,8 @@ def main_worker(gpu, ngpus_per_node, args):
             args.batch_size = int(args.batch_size / ngpus_per_node)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            print("Convering to sync")
+            model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         else:
             model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
@@ -190,7 +197,8 @@ def main_worker(gpu, ngpus_per_node, args):
             model.features = torch.nn.DataParallel(model.features)
             model.cuda()
         else:
-            model = torch.nn.DataParallel(model).cuda()
+            model = torch.nn.DataParallel(model)
+            model = model.cuda()
 
     # define loss function (criterion) and optimizer
     #criterion = nn.CrossEntropyLoss().cuda(args.gpu)
@@ -269,7 +277,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        validate(train_loader, model, criterion, 'e', args)
+        validate(val_loader, model, criterion, 'e', args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -380,10 +388,10 @@ def validate(val_loader, model, criterion, epoch, args):
 
             if args.need_vis:
                 for t, (in_dbg, out_dbg, out_gt, in_dbg1) in get_vis(images, output, target):
-                    cv2.imwrite("./tmp/{}_{}_targ.png".format(i, t), cv2.cvtColor(out_gt, cv2.COLOR_BGR2RGB))
-                    cv2.imwrite("./tmp/{}_{}_in.png".format(i, t), in_dbg)
+                    cv2.imwrite("./tmp/{}_{}_targ.png".format(i, t), out_gt)
+                    cv2.imwrite("./tmp/{}_{}_in.png".format(i, t), cv2.cvtColor(in_dbg, cv2.COLOR_BGR2RGB))
                     cv2.imwrite("./tmp/{}_{}_out.png".format(i, t), out_dbg)
-                    cv2.imwrite("./tmp/{}_{}_crop.png".format(i, t), cv2.cvtColor(in_dbg1, cv2.COLOR_BGR2RGB))
+                    cv2.imwrite("./tmp/{}_{}_crop.png".format(i, t), cv2.cvtColor(in_dbg1, cv2.COLOR_BGRA2RGBA))
 
             # measure accuracy and record loss
             acc1 = accuracy(output.permute(0, 2, 3, 1).reshape(-1, args.num_classes), target.view(-1), topk=(1,))
@@ -464,7 +472,7 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 5))
+    lr = args.lr * (0.1 ** (epoch // 15))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

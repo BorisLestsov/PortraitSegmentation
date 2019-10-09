@@ -214,9 +214,10 @@ class DPNBackbone(nn.Module):
     def __init__(self, backbone='dpn92', pretrained=True):
         super(DPNBackbone, self).__init__()
 
-        pretrained = 'imagenet+5k' if pretrained else False
-
-        _backbone = getattr(pret_models, backbone)(pretrained=pretrained)
+        if not pretrained:
+            _backbone = getattr(pret_models, backbone)(pretrained=False)
+        else:
+            _backbone = getattr(pret_models, backbone)()
         self.backbone = nn.Sequential()
 
         for name, module in _backbone.features.named_children():
@@ -227,6 +228,9 @@ class DPNBackbone(nn.Module):
                         for n1, m1 in m.named_children():
                             if "conv" in n1:
                                 m1.stride = (1, 1)
+                            if "conv" in n1 and 3 in m1.kernel_size:
+                                m1.dilation = (2, 2) if block_idx == 4 else (4, 4)
+                                m1.padding = (2, 2) if block_idx == 4 else (4, 4)
 
             self.backbone.add_module(name, module)
 
@@ -237,10 +241,10 @@ class DPNBackbone(nn.Module):
 
 
 class ACFDPN(nn.Module):
-    def __init__(self, num_classes, arch='dpn92', feat_dim=512, att_dim=512):
+    def __init__(self, num_classes, backbone='dpn92', feat_dim=512, att_dim=512):
         super(ACFDPN, self).__init__()
 
-        self.backbone = DPNBackbone(arch)
+        self.backbone = DPNBackbone(backbone)
         self.head = ACFHead(num_classes, self.backbone.backbone[-1].bn.num_features, feat_dim=512, att_dim=512)
 
         self.upscale_fin = UpscaleConv(num_classes, num_classes)
